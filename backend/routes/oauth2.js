@@ -7,7 +7,7 @@ const Http = new XMLHttpRequest();
 require("dotenv").config();
 
 router.get("/channeli", passport.authenticate("oauth2"));
-
+console.log("chaanneli")
 router.get(
   "/callback",
   passport.authenticate("oauth2", { failureRedirect: "/", session: false }),
@@ -39,9 +39,9 @@ router.get(
       );
 
       // Redirect to frontend auth callback with token
-      res.redirect(`http://localhost:5173/auth/callback?token=${token}`);
+      res.redirect(`http://localhost:${process.env.FRONTEND_PORT}/auth/callback?token=${token}`);
     } else {
-      res.redirect('http://localhost:5173/login?error=auth_failed');
+      res.redirect(`http://localhost:${process.env.FRONTEND_PORT}/login?error=auth_failed`);
     }
   }
 );
@@ -53,7 +53,7 @@ passport.use(
       tokenURL: "https://channeli.in/open_auth/token/",
       clientID: process.env.CHANNELI_CLIENT_ID,
       clientSecret: process.env.CHANNELI_CLIENT_SECRET,
-      callbackURL: "http://localhost:5000/oauth/callback",
+      callbackURL: `http://localhost:${process.env.PORT}/oauth/callback`,
     },
     (accessToken, refreshToken, profile, cb) => {
       console.log("OAuth attempted with token:", accessToken);
