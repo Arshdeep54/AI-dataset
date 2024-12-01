@@ -305,7 +305,23 @@ router.post('/submit', authenticateToken, async (req, res) => {
         // Update counts for each response
         Object.entries(responses).forEach(([artifactId, response]) => {
             const columnName = `artifact_${artifactId}`;
-            imageRow[columnName] = response ? '1' : '0';
+            const currentValue = parseInt(imageRow[columnName]) || 0;
+            
+            console.log('Response received:', response, 'type:', typeof response);
+            console.log('Current value:', currentValue);
+            
+            // Convert boolean response to yes/no string if needed
+            const responseStr = typeof response === 'boolean' ? (response ? 'yes' : 'no') : response;
+            
+            if (responseStr === 'yes' || responseStr === true) {
+                imageRow[columnName] = (currentValue + 1).toString();
+            } else if (responseStr === 'no' || responseStr === false) {
+                imageRow[columnName] = (currentValue - 1).toString();
+            } else {
+                imageRow[columnName] = '0';
+            }
+            
+            console.log('New value:', imageRow[columnName]);
         });
 
         // Write updated data back to CSV

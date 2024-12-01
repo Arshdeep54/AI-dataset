@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: ['http://localhost','http://localhost:5173'],
     credentials: true
 }));
 
@@ -40,11 +40,11 @@ app.use('/images', express.static(path.join(__dirname, 'images')));
 
 // Import routes
 const surveyRoutes = require('./routes/surveyRoutes');
-const oauth = require("./oauth2.js");
+const oauthRoutes = require('./routes/oauth2');
 
 // Use routes
 app.use('/api', surveyRoutes);
-app.use("/oauth", oauth);
+app.use("/oauth", oauthRoutes);
 
 app.listen(port, () => {
   console.log(`listening on port ${port}`);
