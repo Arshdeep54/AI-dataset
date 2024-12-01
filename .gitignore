@@ -54,3 +54,4 @@ coverage/
 backend/survey_results.csv
 backend/images/
 backend/artifacts.json
+backend/survey.db

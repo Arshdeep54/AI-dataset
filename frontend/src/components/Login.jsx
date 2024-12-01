@@ -69,7 +69,7 @@ const Login = () => {
         </div>
 
         <div className="text-center text-xs text-gray-400">
-          By participating, you're contributing to research in AI image generation at IIT Roorkee
+          By participating, you're contributing to project in AI image generation at IIT Roorkee
         </div>
       </div>
     </div>

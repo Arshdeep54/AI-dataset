@@ -5,14 +5,114 @@ const fs = require('fs').promises;
 const csv = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 const jwt = require('jsonwebtoken');
+const sqlite3 = require('sqlite3').verbose();
+const { open } = require('sqlite');
 
 // Load artifacts from JSON file
 const artifactsPath = path.join(__dirname, '..', 'artifacts.json');
 let artifactsList = [];
 const TOTAL_ARTIFACTS = 70; // Set constant for total artifacts
 
-// In-memory store for user-image mappings
-const userImageHistory = new Map();
+// Database setup
+let db;
+const initializeDatabase = async () => {
+    try {
+        db = await open({
+            filename: path.join(__dirname, '..', 'survey.db'),
+            driver: sqlite3.Database
+        });
+
+        // Create user_progress table if it doesn't exist
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS user_progress (
+                user_id TEXT,
+                image_name TEXT,
+                viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, image_name)
+            )
+        `);
+
+        // Create user_stats table if it doesn't exist
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS user_stats (
+                user_id TEXT PRIMARY KEY,
+                images_analyzed INTEGER DEFAULT 0
+            )
+        `);
+
+        console.log('Database initialized successfully');
+    } catch (error) {
+        console.error('Database initialization error:', error);
+        process.exit(1);
+    }
+};
+
+// Initialize database on startup
+initializeDatabase();
+
+// Get user's viewed images
+const getUserViewedImages = async (userId) => {
+    try {
+        const rows = await db.all(
+            'SELECT image_name FROM user_progress WHERE user_id = ?',
+            userId
+        );
+        return new Set(rows.map(row => row.image_name));
+    } catch (error) {
+        console.error('Error getting user viewed images:', error);
+        return new Set();
+    }
+};
+
+// Add image to user's history
+const addImageToUserHistory = async (userId, imageName) => {
+    try {
+        await db.run(
+            'INSERT INTO user_progress (user_id, image_name) VALUES (?, ?)',
+            userId,
+            imageName
+        );
+    } catch (error) {
+        console.error('Error adding image to user history:', error);
+    }
+};
+
+// Clear user's history
+const clearUserHistory = async (userId) => {
+    try {
+        await db.run('DELETE FROM user_progress WHERE user_id = ?', userId);
+    } catch (error) {
+        console.error('Error clearing user history:', error);
+    }
+};
+
+// Get user's stats
+const getUserStats = async (userId) => {
+    try {
+        const stats = await db.get(
+            'SELECT images_analyzed FROM user_stats WHERE user_id = ?',
+            userId
+        );
+        return stats ? stats.images_analyzed : 0;
+    } catch (error) {
+        console.error('Error getting user stats:', error);
+        return 0;
+    }
+};
+
+// Increment user's analyzed images count
+const incrementUserAnalyzedCount = async (userId) => {
+    try {
+        await db.run(`
+            INSERT INTO user_stats (user_id, images_analyzed)
+            VALUES (?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+            images_analyzed = images_analyzed + 1
+        `, userId);
+    } catch (error) {
+        console.error('Error incrementing user analyzed count:', error);
+    }
+};
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -117,13 +217,15 @@ const writeCSVData = async (data) => {
     await fs.writeFile(csvPath, csvContent);
 };
 
-// Apply authentication middleware to routes
 router.get('/random-image', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.enrollmentNumber;
         if (!userId) {
             return res.status(401).json({ error: 'User not authenticated' });
         }
+
+        // Get user's analyzed count
+        const imagesAnalyzed = await getUserStats(userId);
 
         const imagesDir = path.join(__dirname, '..', 'images');
         const files = await fs.readdir(imagesDir);
@@ -135,18 +237,19 @@ router.get('/random-image', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'No images available' });
         }
 
-        // Get user's image history
-        const userHistory = userImageHistory.get(userId) || new Set();
+        // Get user's image history from database
+        const userHistory = await getUserViewedImages(userId);
         
         // Filter out images the user has already seen
         const unseenImages = imageFiles.filter(file => !userHistory.has(file));
 
         // If user has seen all images, clear their history and start over
         if (unseenImages.length === 0) {
-            userImageHistory.set(userId, new Set());
+            await clearUserHistory(userId);
             return res.status(200).json({ 
                 message: 'You have seen all available images. Starting over.',
-                completed: true 
+                completed: true,
+                imagesAnalyzed 
             });
         }
 
@@ -154,19 +257,19 @@ router.get('/random-image', authenticateToken, async (req, res) => {
         const randomIndex = Math.floor(Math.random() * unseenImages.length);
         const randomImage = unseenImages[randomIndex];
 
-        // Add image to user's history
-        userHistory.add(randomImage);
-        userImageHistory.set(userId, userHistory);
+        // Add image to user's history in database
+        await addImageToUserHistory(userId, randomImage);
 
         // Get 10 random artifacts
         const randomArtifacts = getRandomArtifacts(10);
 
-        // Return image URL, filename, and artifacts
+        // Return image URL, filename, artifacts, and stats
         res.json({
             imageUrl: `http://localhost:5000/images/${randomImage}`,
             filename: randomImage,
             artifacts: randomArtifacts,
-            remainingImages: unseenImages.length - 1
+            remainingImages: unseenImages.length - 1,
+            imagesAnalyzed
         });
     } catch (error) {
         console.error('Error getting random image:', error);
@@ -176,12 +279,16 @@ router.get('/random-image', authenticateToken, async (req, res) => {
 
 router.post('/submit', authenticateToken, async (req, res) => {
     const { filename, responses } = req.body;
+    const userId = req.user.enrollmentNumber;
     
     if (!filename || !responses) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
     try {
+        // Increment user's analyzed count
+        await incrementUserAnalyzedCount(userId);
+
         // Read current CSV data
         const csvData = await readCSVData();
         
@@ -198,18 +305,23 @@ router.post('/submit', authenticateToken, async (req, res) => {
         // Update counts for each response
         Object.entries(responses).forEach(([artifactId, response]) => {
             const columnName = `artifact_${artifactId}`;
-            if (response === true) {
-                imageRow[columnName] = (parseInt(imageRow[columnName] || '0') + 1).toString();
-            }
+            imageRow[columnName] = response ? '1' : '0';
         });
 
         // Write updated data back to CSV
         await writeCSVData(csvData);
 
-        res.json({ success: true });
+        // Get updated stats
+        const imagesAnalyzed = await getUserStats(userId);
+        
+        res.json({ 
+            success: true,
+            message: 'Responses recorded successfully',
+            imagesAnalyzed
+        });
     } catch (error) {
-        console.error('Error saving survey response:', error);
-        res.status(500).json({ error: 'Failed to save response' });
+        console.error('Error submitting responses:', error);
+        res.status(500).json({ error: 'Failed to submit responses' });
     }
 });
 

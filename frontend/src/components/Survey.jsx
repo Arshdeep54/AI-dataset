@@ -79,18 +79,19 @@ const Survey = () => {
       if (response.data.completed) {
         // User has seen all images
         setError(response.data.message);
+        setSurveyCount(response.data.imagesAnalyzed);
         setTimeout(() => {
           fetchNewImage(); // Try again after showing the message
         }, 2000);
         return;
       }
 
-      const { imageUrl, filename, artifacts, remainingImages } = response.data;
+      const { imageUrl, filename, artifacts, remainingImages, imagesAnalyzed } = response.data;
       setCurrentImage({ url: imageUrl, filename });
       setArtifacts(artifacts);
       setResponses({});
       setCurrentArtifactIndex(0);
-      setSurveyCount(prev => prev + 1);
+      setSurveyCount(imagesAnalyzed);
     } catch (error) {
       console.error('Error fetching image:', error);
       if (error.response?.status === 401) {
@@ -119,10 +120,11 @@ const Survey = () => {
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      await api.post('/api/submit', {
+      const response = await api.post('/api/submit', {
         filename: currentImage.filename,
         responses
       });
+      setSurveyCount(response.data.imagesAnalyzed);
       fetchNewImage();
     } catch (error) {
       console.error('Error submitting responses:', error);
@@ -163,7 +165,7 @@ const Survey = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -183,81 +185,92 @@ const Survey = () => {
           </button>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-4">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Question {currentArtifactIndex + 1} of {artifacts.length}</span>
-            <span>{Math.round((currentArtifactIndex / artifacts.length) * 100)}% Complete</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-600 rounded-full h-2 transition-all duration-300"
-              style={{ width: `${(currentArtifactIndex / artifacts.length) * 100}%` }}
-            ></div>
+        {/* Main Content - Responsive Layout */}
+        <div className="flex flex-col md:flex-row md:space-x-8 space-y-8 md:space-y-0 items-center justify-center">
+          {/* Image Section - Full width on mobile, left side on desktop */}
+          {currentImage && (
+            <div className="md:w-1/2 w-full flex justify-center">
+              <div className="aspect-w-16 aspect-h-9 bg-gray-200 rounded-lg overflow-hidden w-full max-w-2xl">
+                <img
+                  src={currentImage.url}
+                  alt="Survey"
+                  className="object-contain w-full h-full"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Questions Section - Full width on mobile, right side on desktop */}
+          <div className="md:w-1/2 w-full max-w-2xl">
+            {/* Main Question Text */}
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+              Is this artifact identified in the image shown?
+            </h2>
+            
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-gray-600 mb-2">
+                <span>Question {currentArtifactIndex + 1} of {artifacts.length}</span>
+                <span>{Math.round((currentArtifactIndex / artifacts.length) * 100)}% Complete</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 rounded-full h-2 transition-all duration-300"
+                  style={{ width: `${(currentArtifactIndex / artifacts.length) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Current Question */}
+            {currentArtifact && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                    {currentArtifact.name}
+                  </h3>
+                  <p className="text-gray-600">
+                    {currentArtifact.description}
+                  </p>
+                </div>
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={() => handleResponse(true)}
+                    className={`px-6 py-3 rounded-lg text-lg font-medium ${
+                      responses[currentArtifact.id] === true
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => handleResponse(false)}
+                    className={`px-6 py-3 rounded-lg text-lg font-medium ${
+                      responses[currentArtifact.id] === false
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            {isLastQuestion && hasAnsweredCurrent && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="px-8 py-3 rounded-lg text-white text-lg font-semibold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Submitting...' : 'Submit & Next Image'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Image Display */}
-        {currentImage && (
-          <div className="mb-8">
-            <div className="aspect-w-16 aspect-h-9 bg-gray-200 rounded-lg overflow-hidden">
-              <img
-                src={currentImage.url}
-                alt="Survey"
-                className="object-contain w-full h-full"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Current Question */}
-        {currentArtifact && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                {currentArtifact.name}
-              </h3>
-              <p className="text-gray-600">
-                {currentArtifact.description}
-              </p>
-            </div>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => handleResponse(true)}
-                className={`px-6 py-3 rounded-lg text-lg font-medium ${
-                  responses[currentArtifact.id] === true
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => handleResponse(false)}
-                className={`px-6 py-3 rounded-lg text-lg font-medium ${
-                  responses[currentArtifact.id] === false
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                No
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Submit Button - Only show on last question and when answered */}
-        {isLastQuestion && hasAnsweredCurrent && (
-          <div className="flex justify-center">
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="px-8 py-3 rounded-lg text-white text-lg font-semibold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Submitting...' : 'Submit & Next Image'}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
