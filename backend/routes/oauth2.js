@@ -51,8 +51,8 @@ passport.use(
     {
       authorizationURL: "https://channeli.in/oauth/authorise",
       tokenURL: "https://channeli.in/open_auth/token/",
-      clientID: process.env.CLIENT_ID,
-      clientSecret: process.env.CLIENT_SECRET,
+      clientID: process.env.CHANNELI_CLIENT_ID,
+      clientSecret: process.env.CHANNELI_CLIENT_SECRET,
       callbackURL: "http://localhost:5000/oauth/callback",
     },
     (accessToken, refreshToken, profile, cb) => {

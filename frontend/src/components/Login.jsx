@@ -1,12 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: import.meta.env.VITE_APP_API_URL || "http://localhost:5000",
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,10 +35,21 @@ const Login = () => {
     window.location.href = 'http://localhost:5000/oauth/channeli';
   };
 
+  const handleTest = async () => {
+    try {
+      const response = await api.get('/oauth/test');
+      console.log('Backend test response:', response.data);
+      alert('Backend is accessible! Check console for details.');
+    } catch (error) {
+      console.error('Backend test error:', error);
+      alert('Error connecting to backend. Check console for details.');
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="max-w-xl w-full space-y-8 p-10 bg-white rounded-xl shadow-lg">
-        <div className="text-center">
+      <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             AI Image Analysis Survey
           </h1>

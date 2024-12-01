@@ -5,7 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: import.meta.env.VITE_APP_API_URL || 'http://backend:8000',
   withCredentials: true
 });
 
