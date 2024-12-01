@@ -4,13 +4,17 @@ const session = require("express-session");
 const path = require("path");
 const cookie = require("cookie-parser");
 
+// Import routes
+const surveyRoutes = require('./routes/surveyRoutes');
+const oauthRoutes = require('./routes/oauth2');
+
 require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost','http://localhost:5173'],
+    origin: ['http://localhost','http://localhost:5173','http://localhost:3000',`${process.env.FRONTEND_PROD}`],
     credentials: true
 }));
 
@@ -37,11 +41,6 @@ app.use(
 
 // Serve static images
 app.use('/images', express.static(path.join(__dirname, 'images')));
-
-// Import routes
-const surveyRoutes = require('./routes/surveyRoutes');
-const oauthRoutes = require('./routes/oauth2');
-
 // Use routes
 app.use('/api', surveyRoutes);
 app.use("/oauth", oauthRoutes);
@@ -49,3 +48,4 @@ app.use("/oauth", oauthRoutes);
 app.listen(port, () => {
   console.log(`listening on port ${port}`);
 });
+

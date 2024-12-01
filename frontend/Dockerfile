@@ -9,15 +9,9 @@ RUN npm install
 
 # Copy the rest of the application code and build it
 COPY . .
-RUN npm run build
+# RUN npm run build
 
-# Stage 2: Serve the build
-FROM nginx:alpine AS production
+EXPOSE 5173
 
-# Copy the built application from the first stage
-COPY --from=build /app/dist /usr/share/nginx/html
-# Expose port 80 for the web server
-EXPOSE 80
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
-# Start Nginx server
-CMD ["nginx", "-g", "daemon off;"]
